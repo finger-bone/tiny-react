@@ -1,4 +1,5 @@
-import { createDom, isElement, isFragment, vDOMEquals, VDomNode } from "./v-dom"
+import type React from "react"
+import { createDom, isElement, isFragment, VDomAttributes, vDOMEquals, VDomNode } from "./v-dom"
 
 interface Fiber {
     parent: Fiber | null
@@ -8,12 +9,19 @@ interface Fiber {
     dom: HTMLElement | Text | null
     alternate: Fiber | null
     committed: boolean
+    hooks?: {
+        state: unknown[],
+    },
+    hookIndex?: {
+        state: number,
+    }
 }
 
 let nextUnitOfWork: Fiber | null = null
 let wip: Fiber | null = null
 let wipParent: HTMLElement | null = null
 let oldFiber: Fiber | null = null
+let reRender: (()=>void) | null = null
 
 function commit() {
     function findNonFragmentParent(fiber: Fiber): Fiber | null {
@@ -45,7 +53,6 @@ function commit() {
         }
 
         if(!fiber.alternate && !isFragment(fiber.vDom)) {
-            console.log(fiber.vDom)
             fiber.dom = createDom(fiber.vDom)
             append(fiber)
         }
@@ -186,7 +193,52 @@ export function render(vDom: VDomNode, parent: HTMLElement) {
         dom: null,
         committed: false,
         alternate: oldFiber,
+        hooks: oldFiber?.hooks ?? {
+            state: [],
+        },
+        hookIndex: {
+            state: 0,
+        }
     }
     wipParent = parent
     nextUnitOfWork = wip
+}
+
+export type FuncComponent = (props: VDomAttributes, children: VDomNode[]) => React.JSX.Element
+
+export function mount(app: FuncComponent, props: VDomAttributes, children: VDomNode[], parent: HTMLElement) {
+    reRender = () => {
+        if(!oldFiber) {
+            oldFiber = {
+                parent: null,
+                sibling: null,
+                child: null,
+                vDom: '' as any,
+                dom: null,
+                committed: false,
+                alternate: null,
+                hooks: {
+                    state: [],
+                },
+                hookIndex: {
+                    state: 0,
+                }
+            }
+        }
+        const vDom = app(props, children) as unknown as VDomNode
+        render(vDom, parent)
+    }
+    reRender()
+}
+
+export function useState<T>(initialState: T): [() => T, (newState: T) => void] {
+    const hookIndex = oldFiber!.hookIndex!.state
+    oldFiber!.hookIndex!.state++
+    oldFiber!.hooks!.state[hookIndex] = oldFiber!.hooks!.state[hookIndex] ?? initialState
+    const state = () => oldFiber!.hooks!.state[hookIndex] as T
+    const setState = (newState: T) => {
+        oldFiber!.hooks!.state[hookIndex] = newState
+        reRender!()
+    }
+    return [state, setState]
 }

@@ -1,5 +1,6 @@
 export type VDomAttributes = { 
     key?: string | number
+    style?: unknown
     [_: string]: unknown | undefined
 }
 
@@ -48,6 +49,12 @@ export function createDom(vDom: VDomNode): HTMLElement | Text {
         Object.entries(vDom.props ?? {}).forEach(([name, value]) => {
             if (value === undefined) return
             if (name === 'key') return
+            if (name === 'style') {
+                Object.entries(value as Record<string, unknown>).forEach(([styleName, styleValue]) => {
+                    element.style[styleName as any] = styleValue as any
+                })
+                return
+            }
             if (name.startsWith('on') && value instanceof Function) {
                 element.addEventListener(name.slice(2).toLowerCase(), value as EventListener)
             } else {
@@ -75,11 +82,13 @@ export function vDOMEquals(a: VDomNode, b: VDomNode): boolean {
             for (let i = 0; i < aKeys.length; i++) {
                 const key = aKeys[i]
                 if (key === 'key') continue
+                if (aProps[key] instanceof Function && bProps[key] instanceof Function) continue
                 if (aProps[key] !== bProps[key]) return false
             }
             for (let i = 0; i < bKeys.length; i++) {
                 const key = bKeys[i]
                 if (key === 'key') continue
+                if (aProps[key] instanceof Function && bProps[key] instanceof Function) continue
                 if (aProps[key] !== bProps[key]) return false
             }
             return true
