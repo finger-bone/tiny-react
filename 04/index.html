@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        
+        <link rel="canonical" href="https://finger-bone.github.io/tiny-react/04/">
+        <link rel="shortcut icon" href="../img/favicon.ico">
+        <title>Hooks - Build Your Own React</title>
+        <link href="../css/bootstrap.min.css" rel="stylesheet">
+        <link href="../css/font-awesome.min.css" rel="stylesheet">
+        <link href="../css/base.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/color-brewer.min.css">
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+        <script>hljs.highlightAll();</script> 
+    </head>
+
+    <body>
+        <div class="navbar fixed-top navbar-expand-lg navbar-dark bg-primary">
+            <div class="container">
+                <a class="navbar-brand" href="..">Build Your Own React</a>
+                <!-- Expander button -->
+                <button type="button" class="navbar-toggler" data-toggle="collapse" data-target="#navbar-collapse">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+
+                <!-- Expanded navigation -->
+                <div id="navbar-collapse" class="navbar-collapse collapse">
+                        <!-- Main navigation -->
+                        <ul class="nav navbar-nav">
+                            <li class="navitem">
+                                <a href="../01/" class="nav-link">JSX</a>
+                            </li>
+                            <li class="navitem">
+                                <a href="../02/" class="nav-link">Rendering vDOM</a>
+                            </li>
+                            <li class="navitem">
+                                <a href="../03/" class="nav-link">Updating vDOM</a>
+                            </li>
+                            <li class="navitem active">
+                                <a href="./" class="nav-link">Hooks</a>
+                            </li>
+                        </ul>
+
+                    <ul class="nav navbar-nav ml-auto">
+                        <li class="nav-item">
+                            <a href="#" class="nav-link" data-toggle="modal" data-target="#mkdocs_search_modal">
+                                <i class="fa fa-search"></i> Search
+                            </a>
+                        </li>
+                            <li class="nav-item">
+                                <a rel="prev" href="../03/" class="nav-link">
+                                    <i class="fa fa-arrow-left"></i> Previous
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a rel="next" class="nav-link disabled">
+                                    Next <i class="fa fa-arrow-right"></i>
+                                </a>
+                            </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="row">
+                    <div class="col-md-3"><div class="navbar-light navbar-expand-md bs-sidebar hidden-print affix" role="complementary">
+    <div class="navbar-header">
+        <button type="button" class="navbar-toggler collapsed" data-toggle="collapse" data-target="#toc-collapse" title="Table of Contents">
+            <span class="fa fa-angle-down"></span>
+        </button>
+    </div>
+
+    
+    <div id="toc-collapse" class="navbar-collapse collapse card bg-secondary">
+        <ul class="nav flex-column">
+            
+            <li class="nav-item" data-level="1"><a href="#tiny-react-ch04-hooks" class="nav-link">Tiny React Ch04 Hooks</a>
+              <ul class="nav flex-column">
+            <li class="nav-item" data-level="2"><a href="#fixing-the-last-chapter" class="nav-link">Fixing the last chapter</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-level="2"><a href="#usestate" class="nav-link">useState</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-level="2"><a href="#summary" class="nav-link">Summary</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+              </ul>
+            </li>
+        </ul>
+    </div>
+</div></div>
+                    <div class="col-md-9" role="main">
+
+<h1 id="tiny-react-ch04-hooks">Tiny React Ch04 Hooks</h1>
+<p>Okay, before diving into hooks, we need a bit wrap up on the last chapter- still something to fix, but the last chapter was too much, so, well, here it is.</p>
+<h2 id="fixing-the-last-chapter">Fixing the last chapter</h2>
+<p>Here are some minor things- not entirely bugs, but better to fix them.</p>
+<h3 id="vdom-comparison">vDOM Comparison</h3>
+<p>In javascript, two functions are equal only if they are the same, stays unequal even if they have the same procedure, that is,</p>
+<pre><code class="language-javascript">const a = () =&gt; 1;
+const b = () =&gt; 1;
+a === b; // false
+</code></pre>
+<p>So, when it comes to vDOM Comparison, we should skip the function comparison. Here is the fix,</p>
+<pre><code class="language-typescript">for (let i = 0; i &lt; aKeys.length; i++) {
+    const key = aKeys[i]
+    if (key === 'key') continue
+    if (aProps[key] instanceof Function &amp;&amp; bProps[key] instanceof Function) continue
+    if (aProps[key] !== bProps[key]) return false
+}
+for (let i = 0; i &lt; bKeys.length; i++) {
+    const key = bKeys[i]
+    if (key === 'key') continue
+    if (aProps[key] instanceof Function &amp;&amp; bProps[key] instanceof Function) continue
+    if (aProps[key] !== bProps[key]) return false
+}
+</code></pre>
+<h3 id="handling-css">Handling CSS</h3>
+<p>Style should be treated as a special property that is attributed to element with <code>.style</code> property. Here is the fix,</p>
+<pre><code class="language-typescript">export type VDomAttributes = { 
+    key?: string | number
+    style?: object
+    [_: string]: unknown | undefined
+}
+
+export function createDom(vDom: VDomNode): HTMLElement | Text {
+    if (isElement(vDom)) {
+        const element = document.createElement(vDom.tag)
+        Object.entries(vDom.props ?? {}).forEach(([name, value]) =&gt; {
+            if (value === undefined) return
+            if (name === 'key') return
+            if (name === 'style') {
+                Object.entries(value as Record&lt;string, unknown&gt;).forEach(([styleName, styleValue]) =&gt; {
+                    element.style[styleName as any] = styleValue as any
+                })
+                return
+            }
+            if (name.startsWith('on') &amp;&amp; value instanceof Function) {
+                element.addEventListener(name.slice(2).toLowerCase(), value as EventListener)
+            } else {
+                element.setAttribute(name, value?.toString() ?? &quot;&quot;)
+            }
+        })
+        return element
+    } else {
+        return document.createTextNode(vDom)
+    }
+}
+</code></pre>
+<p>Now these side fixes are done, let's move on to the main topic of this chapter- Hooks.</p>
+<h3 id="capsuling-vdom-creation">Capsuling vDOM Creation</h3>
+<p>We previously explicitly called <code>render(vDom, app!)</code>, which requires creating vDOM by user, here is a better way to do it.</p>
+<pre><code class="language-tsx">import { mount, useState, type FuncComponent } from &quot;./runtime&quot;;
+import { createElement, fragment, VDomAttributes, VDomNode } from &quot;./v-dom&quot;;
+
+const App: FuncComponent = (props: VDomAttributes, __: VDomNode[]) =&gt; {
+    const [cnt, setCnt] = useState(0)
+    return &lt;div&gt;
+        &lt;button onClick={() =&gt; setCnt(cnt() + 1)}&gt;Click me&lt;/button&gt;
+        &lt;p&gt;Count: {cnt()}&lt;/p&gt;
+    &lt;/div&gt;
+}
+const app = document.getElementById('app')
+mount(App, {}, [], app!)
+</code></pre>
+<pre><code class="language-typescript">let reRender: () =&gt; void = () =&gt; {}
+export function mount(app: FuncComponent, props: VDomAttributes, children: VDomNode[], parent: HTMLElement) {
+    reRender = () =&gt; {
+        const vDom = app(props, children) as unknown as VDomNode
+        render(vDom, parent)
+    }
+    reRender()
+}
+</code></pre>
+<p>Looks better more or less. Now let's move on to the main topic of this chapter- Hooks.</p>
+<h2 id="usestate">useState</h2>
+<p>Okay, let's get to the hook. The first hook we are going to implement is <code>useState</code>. It is a hook that allows us to manage the state of a component. We can have the following signature for <code>useState</code>,</p>
+<p>Note that our implementation is slightly different from the original React. We are going to return a getter and a setter function, instead of returning the state directly.</p>
+<pre><code class="language-typescript">function useState&lt;T&gt;(initialValue: T): [() =&gt; T, (newValue: T) =&gt; void] {
+    // implementation
+}
+</code></pre>
+<p>So where will we hook the value at? If we just hide it within the closure itself, the value will be lost when the component is re-rendered. If you insist on doing so, you need to access the space of the outer function, which is not possible in javascript.</p>
+<p>So our way is to store it, you guessed it, in fiber. So, let's add a field to the fiber.</p>
+<pre><code class="language-typescript">interface Fiber {
+    parent: Fiber | null
+    sibling: Fiber | null
+    child: Fiber | null
+    vDom: VDomNode
+    dom: HTMLElement | Text | null
+    alternate: Fiber | null
+    committed: boolean
+    hooks?: {
+        state: unknown[]
+    },
+    hookIndex?: {
+        state: number
+    }
+}
+</code></pre>
+<p>And we only mount hooks to the root fiber, so we can add the following line to the <code>mount</code> function.</p>
+<pre><code class="language-typescript">export function render(vDom: VDomNode, parent: HTMLElement) {
+    wip = {
+        parent: null,
+        sibling: null,
+        child: null,
+        vDom: vDom,
+        dom: null,
+        committed: false,
+        alternate: oldFiber,
+        hooks: oldFiber?.hooks ?? {
+            state: []
+        },
+        hookIndex: {
+            state: 0
+        }
+    }
+    wipParent = parent
+    nextUnitOfWork = wip
+}
+</code></pre>
+<p>Hook index will come into use later. Now, hook index resets every time the component is re-rendered, but old hooks are carried over.</p>
+<p>Please note that, we rendering component vDOM, only old fiber is accessible, so we can only manipulate that variable. However, it is null at the very beginning, so let's set up a dummy.</p>
+<pre><code class="language-typescript">export function mount(app: FuncComponent, props: VDomAttributes, children: VDomNode[], parent: HTMLElement) {
+    reRender = () =&gt; {
+        if(!oldFiber) {
+            oldFiber = {
+                parent: null,
+                sibling: null,
+                child: null,
+                vDom: null as any,
+                dom: null,
+                committed: false,
+                alternate: null,
+                hooks: {
+                    state: []
+                },
+                hookIndex: {
+                    state: 0
+                }
+            }
+        }
+        const vDom = app(props, children) as unknown as VDomNode
+        render(vDom, parent)
+        console.log('rerender')
+        console.log(vDom)
+    }
+    reRender()
+}
+</code></pre>
+<p>Now we will have big brain time- since the order of each hook call is fixed (you can not use hooks in a loop or a condition, basic React rule, you know why it is now), so we can use safely use <code>hookIndex</code> to access the hook.</p>
+<pre><code class="language-typescript">export function useState&lt;T&gt;(initialState: T): [T, (newState: T) =&gt; void] {
+    const hookIndex = oldFiber!.hookIndex!.state
+    oldFiber!.hookIndex!.state++
+    oldFiber!.hooks!.state[hookIndex] = oldFiber!.hooks!.state[hookIndex] ?? initialState
+    console.log(oldFiber!.hooks!.state)
+    const state = oldFiber!.hooks!.state[hookIndex]
+    const setState = (newState: T) =&gt; {
+        oldFiber!.hooks!.state[hookIndex] = newState
+        reRender!()
+    }
+    return [state as T, setState]
+}
+</code></pre>
+<p>Well, let's try,</p>
+<pre><code class="language-tsx">import { mount, useState, type FuncComponent } from &quot;./runtime&quot;;
+import { createElement, fragment, VDomAttributes, VDomNode } from &quot;./v-dom&quot;;
+
+const App: FuncComponent = (props: VDomAttributes, __: VDomNode[]) =&gt; {
+    const [cnt, setCnt] = useState(0)
+    return &lt;div&gt;
+        &lt;button onClick={() =&gt; setCnt(cnt + 1)}&gt;Click me&lt;/button&gt;
+        &lt;p&gt;Count: {cnt}&lt;/p&gt;
+    &lt;/div&gt;
+}
+const app = document.getElementById('app')
+mount(App, {}, [], app!)
+</code></pre>
+<p>It kind of works- the count increased from zero to one, but it does not increase further.</p>
+<p>Well... strange right? Let's see what's going on, debug time.</p>
+<pre><code class="language-tsx">const App: FuncComponent = (props: VDomAttributes, __: VDomNode[]) =&gt; {
+    const [cnt, setCnt] = useState(0)
+    return &lt;div&gt;
+        &lt;button onClick={() =&gt; {
+            console.log(cnt + 1)
+            console.log(&quot;FROM COMPONENT&quot;)
+            setCnt(cnt + 1)
+        }}&gt;Click me&lt;/button&gt;
+        &lt;p&gt;Count: {cnt}&lt;/p&gt;
+    &lt;/div&gt;
+}
+const app = document.getElementById('app')
+mount(App, {}, [], app!)
+</code></pre>
+<p>You will see that, it always log 1. But the web page tells us that it is 1, so it should be 2. What's going on?</p>
+<p>For native types, javascript passes by value, so the value is copied, not referenced. In React class component, it requires you to have a state object to address the issues. In functional component, the React addresses with, closure. But if we were to use the latter, it requires a big change in our code. So a simple way to get pass is, using function to get the state, so that the function will always return the latest state.</p>
+<pre><code class="language-typescript">export function useState&lt;T&gt;(initialState: T): [() =&gt; T, (newState: T) =&gt; void] {
+    const hookIndex = oldFiber!.hookIndex!.state
+    oldFiber!.hookIndex!.state++
+    oldFiber!.hooks!.state[hookIndex] = oldFiber!.hooks!.state[hookIndex] ?? initialState
+    console.log(oldFiber!.hooks!.state)
+    const state = () =&gt; oldFiber!.hooks!.state[hookIndex] as T
+    const setState = (newState: T) =&gt; {
+        oldFiber!.hooks!.state[hookIndex] = newState
+        reRender!()
+    }
+    return [state, setState]
+}
+</code></pre>
+<p>And now, here we got it! It works! We created the <code>useState</code> hook for our tiny React.</p>
+<h2 id="summary">Summary</h2>
+<p>Okay, you may believe that this chapter is too short- hooks are important to react, so why did we only implement <code>useState</code>?</p>
+<p>First, many hooks are just variations of <code>useState</code>. Such hook is irrelevant to the component it is called, for example, <code>useMemo</code>. Such things are just trivial works and we got no time to waste.</p>
+<p>But, second, the most important reason, is that, for hooks like <code>useEffect</code>, under our current, root-update based frame, they are nearly impossible to do. When a fiber unmount, you can not signal, because we only fetch the global vDOM and update the whole vDOM, whereas, in real React, it's not like so.</p>
+<p>In real React, functional components are updated by the parent component, so the parent component can signal the child component to unmount. But in our case, we only update the root component, so we can not signal the child component to unmount.</p></div>
+            </div>
+        </div>
+
+        <footer class="col-md-12">
+            <hr>
+            <p>Documentation built with <a href="https://www.mkdocs.org/">MkDocs</a>.</p>
+        </footer>
+        <script src="../js/jquery-3.6.0.min.js"></script>
+        <script src="../js/bootstrap.min.js"></script>
+        <script>
+            var base_url = "..",
+                shortcuts = {"help": 191, "next": 78, "previous": 80, "search": 83};
+        </script>
+        <script src="../js/base.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.4/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+        <script src="../search/main.js"></script>
+
+        <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="searchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="searchModalLabel">Search</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+                <p>From here you can search these documents. Enter your search terms below.</p>
+                <form>
+                    <div class="form-group">
+                        <input type="search" class="form-control" placeholder="Search..." id="mkdocs-search-query" title="Type search term here">
+                    </div>
+                </form>
+                <div id="mkdocs-search-results" data-no-results-text="No results found"></div>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div><div class="modal" id="mkdocs_keyboard_modal" tabindex="-1" role="dialog" aria-labelledby="keyboardModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="keyboardModalLabel">Keyboard Shortcuts</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 20%;">Keys</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="help shortcut"><kbd>?</kbd></td>
+                    <td>Open this help</td>
+                  </tr>
+                  <tr>
+                    <td class="next shortcut"><kbd>n</kbd></td>
+                    <td>Next page</td>
+                  </tr>
+                  <tr>
+                    <td class="prev shortcut"><kbd>p</kbd></td>
+                    <td>Previous page</td>
+                  </tr>
+                  <tr>
+                    <td class="search shortcut"><kbd>s</kbd></td>
+                    <td>Search</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div>
+
+    </body>
+</html>

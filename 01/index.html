@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        
+        <link rel="canonical" href="https://finger-bone.github.io/tiny-react/01/">
+        <link rel="shortcut icon" href="../img/favicon.ico">
+        <title>JSX - Build Your Own React</title>
+        <link href="../css/bootstrap.min.css" rel="stylesheet">
+        <link href="../css/font-awesome.min.css" rel="stylesheet">
+        <link href="../css/base.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/color-brewer.min.css">
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+        <script>hljs.highlightAll();</script> 
+    </head>
+
+    <body>
+        <div class="navbar fixed-top navbar-expand-lg navbar-dark bg-primary">
+            <div class="container">
+                <a class="navbar-brand" href="..">Build Your Own React</a>
+                <!-- Expander button -->
+                <button type="button" class="navbar-toggler" data-toggle="collapse" data-target="#navbar-collapse">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+
+                <!-- Expanded navigation -->
+                <div id="navbar-collapse" class="navbar-collapse collapse">
+                        <!-- Main navigation -->
+                        <ul class="nav navbar-nav">
+                            <li class="navitem active">
+                                <a href="./" class="nav-link">JSX</a>
+                            </li>
+                            <li class="navitem">
+                                <a href="../02/" class="nav-link">Rendering vDOM</a>
+                            </li>
+                            <li class="navitem">
+                                <a href="../03/" class="nav-link">Updating vDOM</a>
+                            </li>
+                            <li class="navitem">
+                                <a href="../04/" class="nav-link">Hooks</a>
+                            </li>
+                        </ul>
+
+                    <ul class="nav navbar-nav ml-auto">
+                        <li class="nav-item">
+                            <a href="#" class="nav-link" data-toggle="modal" data-target="#mkdocs_search_modal">
+                                <i class="fa fa-search"></i> Search
+                            </a>
+                        </li>
+                            <li class="nav-item">
+                                <a rel="prev" class="nav-link disabled">
+                                    <i class="fa fa-arrow-left"></i> Previous
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a rel="next" href="../02/" class="nav-link">
+                                    Next <i class="fa fa-arrow-right"></i>
+                                </a>
+                            </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="row">
+                    <div class="col-md-3"><div class="navbar-light navbar-expand-md bs-sidebar hidden-print affix" role="complementary">
+    <div class="navbar-header">
+        <button type="button" class="navbar-toggler collapsed" data-toggle="collapse" data-target="#toc-collapse" title="Table of Contents">
+            <span class="fa fa-angle-down"></span>
+        </button>
+    </div>
+
+    
+    <div id="toc-collapse" class="navbar-collapse collapse card bg-secondary">
+        <ul class="nav flex-column">
+            
+            <li class="nav-item" data-level="1"><a href="#tiny-react-ch1-jsx" class="nav-link">Tiny React Ch1 JSX</a>
+              <ul class="nav flex-column">
+            <li class="nav-item" data-level="2"><a href="#jsx" class="nav-link">JSX</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-level="2"><a href="#implement-jsx" class="nav-link">Implement JSX</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-level="2"><a href="#footnote" class="nav-link">Footnote</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+              </ul>
+            </li>
+        </ul>
+    </div>
+</div></div>
+                    <div class="col-md-9" role="main">
+
+<h1 id="tiny-react-ch1-jsx">Tiny React Ch1 JSX</h1>
+<p>This series will build a tiny frontend framework, functionally similar to React, to illustrate how React works under the hood. This chapter overs JSX.</p>
+<p>I will use Bun as runtime. Node may need extra configuration for typescript and compiling.</p>
+<h2 id="jsx">JSX</h2>
+<p>Now, before we go any deeper, let's look at several important element of react- jsx first.</p>
+<p>If you ever took a look at the transpiled code of a React component, you will see that it is just a bunch of function calls. JSX is just a syntactic sugar for <code>React.createElement</code>. That is, for exmaple, the following JSX code:</p>
+<pre><code class="language-jsx">const element = &lt;h1 className=&quot;greeting&quot;&gt;Hello, world!&lt;/h1&gt;;
+</code></pre>
+<p>Will be transpiled to:</p>
+<pre><code class="language-js">const element = React.createElement(
+  'h1',
+  {className: 'greeting'},
+  'Hello, world!'
+);
+</code></pre>
+<p><code>React.createElement</code> will create a virtual element, which is another core mechanism. To put it simply, virtual element is the element in virtual DOM. A virtual DOM is something that represents the actual DOM. Since operating on virtual DOM is simply operating js objects, it is much faster than operating on actual DOM. We will talk about virtual DOM in the next chapter. But for now, knowing that JSX is just a syntax sugar for <code>React.createElement</code> is enough.</p>
+<p>The <code>React.createElement</code> function takes the following arguments in order,</p>
+<ol>
+<li>The tag name of the element. Some tags are special, like <code>div</code>, <code>span</code>, <code>h1</code>, etc. These are called intrinsic elements. Some tags are user-defined components.</li>
+<li>The props of the element. This is an object that contains the properties of the element. For example, the <code>className</code> of the <code>h1</code> element above is <code>greeting</code>.</li>
+<li>The children of the element. This can be string or element. Please note that this parameter is represented as <code>...children</code> in the function signature, which means that it can take any number of arguments.</li>
+</ol>
+<p>It sounds an easy job, right? So let's do it.</p>
+<h2 id="implement-jsx">Implement JSX</h2>
+<p>When it comes to compilation, we can specify the function to use- by default, the function is <code>React.createElement</code>. But we can use our own function.</p>
+<p>So we create a <code>v-dom.ts</code>, so as to define the virtual element first.</p>
+<pre><code class="language-typescript">export type VDomAttributes = { 
+    key?: string | number
+    [_: string]: string | number | boolean | Function | undefined
+}
+
+export interface VDomElement {
+  kind: 'element'
+  tag: string
+  children?: VDomNode[]
+  props?: VDomAttributes
+  key: string | number | undefined
+}
+
+export type VDomNode = 
+| string
+| VDomElement
+</code></pre>
+<p>Please note that we have a <code>key</code> field in each node (node is just a name for either text or element). This is for reconciliation, which we will talk about in the next chapter. You can safely ignore it for now.</p>
+<p>Now we can implement the <code>createElement</code> function. We put it in the same file.</p>
+<pre><code class="language-typescript">
+export function createElement(tag: string, props: VDomAttributes, ...children: VDomNode[]): VDomElement {
+  console.log('createElement', tag, props, children)
+    return {
+        kind: 'element',
+        tag,
+        children,
+        props,
+        key: props?.key ?? undefined
+    }
+}
+</code></pre>
+<p>Now we instruct our compiler to use this function. We can do this by adding the following line to the top of our file.</p>
+<pre><code class="language-typescript">import { createElement as h } from './v-dom'
+</code></pre>
+<p>Please note that since we are adopting react standard, we need to introduce the React type definition. We can do this by adding the following line to the top of our file.</p>
+<pre><code class="language-bash">bun i @types/react
+</code></pre>
+<p>Then in the <code>tsconfig.json</code>, we add the following line to the <code>compilerOptions</code> field.</p>
+<pre><code class="language-json">&quot;compilerOptions&quot;: {
+    &quot;jsx&quot;: &quot;react&quot;,
+    &quot;jsxFactory&quot;: &quot;createElement&quot;,
+}
+</code></pre>
+<p>Now, we can take a look at the virtual element we created.</p>
+<pre><code class="language-tsx">import { createElement } from &quot;./v-dom&quot;;
+
+function App() {
+    return &lt;div&gt;
+        &lt;h1&gt;a&lt;/h1&gt;
+        &lt;h2&gt;b&lt;/h2&gt;
+    &lt;/div&gt;
+}
+
+console.log(App());
+</code></pre>
+<p>You will see just our defined virtual dom element based on the JSX code.</p>
+<p>Furthermore, we can also define a fragment element- the <code>&lt;&gt;</code>, if you don't know its official name. We can do this by adding the following line to the top of our file.</p>
+<p>When dealing with fragment, the compiler will take the configured fragment factory to the tag in the element creation function. This is the same as how functional components work- functional component will take the function to the tag, which we will demonstrate in the next chapter.</p>
+<p>Nonetheless, in our implementation, there is no need for complex handling- we just need to set a special tag for fragment.</p>
+<pre><code class="language-typescript">export type VDomAttributes = { 
+    key?: string | number
+    [_: string]: string | number | boolean | Function | undefined
+}
+
+export interface VDomElement {
+  kind: 'element' | 'fragment'
+  tag: string
+  children?: VDomNode[]
+  props?: VDomAttributes
+  key: string | number | undefined
+}
+
+export type VDomNode = 
+| string
+| VDomElement
+
+export function createElement(tag: string, props: VDomAttributes, ...children: VDomNode[]): VDomElement {
+    console.log('createElement', tag, props, children);
+    return {
+        kind: tag === '' ? 'fragment' : 'element',
+        tag,
+        children,
+        props: props ?? {},
+        key: props?.key ?? undefined
+    }
+}
+
+export const fragment = ''
+</code></pre>
+<p>Extra compiler options,</p>
+<pre><code class="language-json">&quot;jsxFragmentFactory&quot;: &quot;fragment&quot;
+</code></pre>
+<p>Basically, fragment is just a special element with an empty tag. When it comes to the creation of fragment, the compiler will fetch the <code>jsxFragmentFactory</code> and put it into the tag parameter in the first parameter of <code>createElement</code>. So we can easily distinguish fragment from other elements.</p>
+<pre><code class="language-tsx">import { createElement, fragment } from &quot;./v-dom&quot;;
+
+function App() {
+    return &lt;&gt;
+        &lt;h1&gt;a&lt;/h1&gt;
+        &lt;h2&gt;b&lt;/h2&gt;
+    &lt;/&gt;
+}
+
+console.log(App());
+</code></pre>
+<p>This code will correct yield the virtual DOM. So far, we have implemented the JSX part of our tiny react.</p>
+<h2 id="footnote">Footnote</h2>
+<p>Ugh, this is the author from chapter three. Actually, the current implementation of JSX is not perfect. We will fix it in the third chapter. Now it does not support syntax like,</p>
+<pre><code class="language-tsx">&lt;div&gt;
+    {[1, 2, 3].map(i =&gt; &lt;span&gt;{i}&lt;/span&gt;)}
+&lt;/div&gt;
+</code></pre>
+<p>This is because every <code>{}</code> is treated as one child, where as the map returns an array. So it will have nested children.</p>
+<p>Also we hadn't supported functional components yet, which is in the next chapter.</p>
+<p>You can just follow the current one and fix it later. Sorry for the inconvenience.</p></div>
+            </div>
+        </div>
+
+        <footer class="col-md-12">
+            <hr>
+            <p>Documentation built with <a href="https://www.mkdocs.org/">MkDocs</a>.</p>
+        </footer>
+        <script src="../js/jquery-3.6.0.min.js"></script>
+        <script src="../js/bootstrap.min.js"></script>
+        <script>
+            var base_url = "..",
+                shortcuts = {"help": 191, "next": 78, "previous": 80, "search": 83};
+        </script>
+        <script src="../js/base.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.4/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+        <script src="../search/main.js"></script>
+
+        <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="searchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="searchModalLabel">Search</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+                <p>From here you can search these documents. Enter your search terms below.</p>
+                <form>
+                    <div class="form-group">
+                        <input type="search" class="form-control" placeholder="Search..." id="mkdocs-search-query" title="Type search term here">
+                    </div>
+                </form>
+                <div id="mkdocs-search-results" data-no-results-text="No results found"></div>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div><div class="modal" id="mkdocs_keyboard_modal" tabindex="-1" role="dialog" aria-labelledby="keyboardModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="keyboardModalLabel">Keyboard Shortcuts</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 20%;">Keys</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="help shortcut"><kbd>?</kbd></td>
+                    <td>Open this help</td>
+                  </tr>
+                  <tr>
+                    <td class="next shortcut"><kbd>n</kbd></td>
+                    <td>Next page</td>
+                  </tr>
+                  <tr>
+                    <td class="prev shortcut"><kbd>p</kbd></td>
+                    <td>Previous page</td>
+                  </tr>
+                  <tr>
+                    <td class="search shortcut"><kbd>s</kbd></td>
+                    <td>Search</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div>
+
+    </body>
+</html>

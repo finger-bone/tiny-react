@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        
+        <link rel="canonical" href="https://finger-bone.github.io/tiny-react/02/">
+        <link rel="shortcut icon" href="../img/favicon.ico">
+        <title>Rendering vDOM - Build Your Own React</title>
+        <link href="../css/bootstrap.min.css" rel="stylesheet">
+        <link href="../css/font-awesome.min.css" rel="stylesheet">
+        <link href="../css/base.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/color-brewer.min.css">
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+        <script>hljs.highlightAll();</script> 
+    </head>
+
+    <body>
+        <div class="navbar fixed-top navbar-expand-lg navbar-dark bg-primary">
+            <div class="container">
+                <a class="navbar-brand" href="..">Build Your Own React</a>
+                <!-- Expander button -->
+                <button type="button" class="navbar-toggler" data-toggle="collapse" data-target="#navbar-collapse">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+
+                <!-- Expanded navigation -->
+                <div id="navbar-collapse" class="navbar-collapse collapse">
+                        <!-- Main navigation -->
+                        <ul class="nav navbar-nav">
+                            <li class="navitem">
+                                <a href="../01/" class="nav-link">JSX</a>
+                            </li>
+                            <li class="navitem active">
+                                <a href="./" class="nav-link">Rendering vDOM</a>
+                            </li>
+                            <li class="navitem">
+                                <a href="../03/" class="nav-link">Updating vDOM</a>
+                            </li>
+                            <li class="navitem">
+                                <a href="../04/" class="nav-link">Hooks</a>
+                            </li>
+                        </ul>
+
+                    <ul class="nav navbar-nav ml-auto">
+                        <li class="nav-item">
+                            <a href="#" class="nav-link" data-toggle="modal" data-target="#mkdocs_search_modal">
+                                <i class="fa fa-search"></i> Search
+                            </a>
+                        </li>
+                            <li class="nav-item">
+                                <a rel="prev" href="../01/" class="nav-link">
+                                    <i class="fa fa-arrow-left"></i> Previous
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a rel="next" href="../03/" class="nav-link">
+                                    Next <i class="fa fa-arrow-right"></i>
+                                </a>
+                            </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="row">
+                    <div class="col-md-3"><div class="navbar-light navbar-expand-md bs-sidebar hidden-print affix" role="complementary">
+    <div class="navbar-header">
+        <button type="button" class="navbar-toggler collapsed" data-toggle="collapse" data-target="#toc-collapse" title="Table of Contents">
+            <span class="fa fa-angle-down"></span>
+        </button>
+    </div>
+
+    
+    <div id="toc-collapse" class="navbar-collapse collapse card bg-secondary">
+        <ul class="nav flex-column">
+            
+            <li class="nav-item" data-level="1"><a href="#tiny-react-ch2-rendering-vdom" class="nav-link">Tiny React Ch2 Rendering vDOM</a>
+              <ul class="nav flex-column">
+            <li class="nav-item" data-level="2"><a href="#rendering-vdom" class="nav-link">Rendering vDOM</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-level="2"><a href="#idle-time-rendering" class="nav-link">Idle Time Rendering</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-level="2"><a href="#fiber-tree" class="nav-link">Fiber Tree</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-level="2"><a href="#cumulative-commit" class="nav-link">Cumulative Commit</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-level="2"><a href="#nested-components" class="nav-link">Nested Components</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-level="2"><a href="#fragment" class="nav-link">Fragment</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+              </ul>
+            </li>
+        </ul>
+    </div>
+</div></div>
+                    <div class="col-md-9" role="main">
+
+<h1 id="tiny-react-ch2-rendering-vdom">Tiny React Ch2 Rendering vDOM</h1>
+<p>This part we will render the vDOM to the actual DOM. In addition, we will also introduce fiber tree, which a core structure in React.</p>
+<h2 id="rendering-vdom">Rendering vDOM</h2>
+<p>Rendering vDOM is, simple- too simple. You need to know the following web native APIs.</p>
+<ul>
+<li><code>document.createElement(tagName: string): HTMLElement</code> Creates an actual DOM element.</li>
+<li><code>document.createTextNode(text: string): Text</code> Creates a text node.</li>
+<li><code>.appendChild(child: Node): void</code> Appends a child node to the parent node. A method on <code>HTMLElement</code></li>
+<li><code>.removeChild(child: Node): void</code> Removes a child node from the parent node. A method on <code>HTMLElement</code></li>
+<li><code>.replaceChild(newChild: Node, oldChild: Node): void</code> Replaces a child node with a new child node. A method on <code>HTMLElement</code></li>
+<li><code>.replaceWith(...nodes: Node[]): void</code> Replaces a node with new nodes. A method on <code>Node</code></li>
+<li><code>.remove(): void</code> Removes a node from the document. A method on <code>Node</code></li>
+<li><code>.insertBefore(newChild: Node, refChild: Node): void</code> Inserts a new child node before a reference child node. A method on <code>HTMLElement</code></li>
+<li><code>.setAttribute(name: string, value: string): void</code> Sets an attribute on an element. A method on <code>HTMLElement</code>.</li>
+<li><code>.removeAttribute(name: string): void</code> Removes an attribute from an element. A method on <code>HTMLElement</code>.</li>
+<li><code>.addEventListener(type: string, listener: Function): void</code> Adds an event listener to an element. A method on <code>HTMLElement</code>.</li>
+<li><code>.removeEventListener(type: string, listener: Function): void</code> Removes an event listener from an element. A method on <code>HTMLElement</code>.</li>
+<li><code>.dispatchEvent(event: Event): void</code> Dispatches an event on an element. A method on <code>HTMLElement</code>.</li>
+</ul>
+<p>Woa, a bit too much, right? But all you need to do is mirroring the creation of vDOM to the actual DOM. Here is a simple example.</p>
+<pre><code class="language-javascript">function render(vDom: VDomNode, parent: HTMLElement) {
+    if (typeof vDom === 'string') {
+        parent.appendChild(document.createTextNode(vDom))
+    } else if (vDom.kind === 'element') {
+        const element = document.createElement(vDom.tag)
+        for (const [key, value] of Object.entries(vDom.props ?? {})) {
+            if (key === 'key') continue
+            if (key.startsWith('on')) {
+                element.addEventListener(key.slice(2).toLowerCase(), value as EventListener)
+            } else {
+                element.setAttribute(key, value as string)
+            }
+        }
+        for (const child of vDom.children ?? []) {
+            render(child, element)
+        }
+        parent.appendChild(element)
+    } else {
+        for (const child of vDom.children ?? []) {
+            render(child, parent)
+        }
+    }
+}
+</code></pre>
+<p>We registered properties starting with <code>on</code> as event listeners, this is a common practice in React. Also, we ignored the <code>key</code> property, which is used for reconciliation, not for rendering.</p>
+<p>Okay, so rendering done and this chapter ends...? No.</p>
+<h2 id="idle-time-rendering">Idle Time Rendering</h2>
+<p>In real react, the rendering process is a bit more complicated. To be more specific, it will use <code>requestIdleCallback</code>, to make more urgent tasks to be done first, lowering its own priority.</p>
+<p>Please note that <code>requestIdleCallback</code> is not supported on Safari, on both MacOS and iOS (Apple Engineers, please, why? At least they are working on it, at 2024). If you are on a Mac, use chrome, or replace it with a simple <code>setTimeout</code>. In real react, it uses <code>scheduler</code> to handle this, but the basic idea is the same.</p>
+<p>To do so, we need to know the following web native APIs.</p>
+<ul>
+<li><code>requestIdleCallback(callback: Function): void</code> Requests a callback to be called when the browser is idle. The callback will be passed an <code>IdleDeadline</code> object. The callback will have a <code>deadline</code> argument, which is an object with the following properties.</li>
+<li><code>timeRemaining(): number</code> Returns the time remaining in milliseconds before the browser is no longer idle. So we should finish our work before the time is up.</li>
+</ul>
+<p>So we need to split our rendering in chunks, and use <code>requestIdleCallback</code> to handle it. A simple way would be to just render one node at a time. It is easy- but do not be eager to do so- or you'll waste a lot of time, since we also need other work to be done while rendering.</p>
+<p>But we can have the following code as a basic framework for what we are going to do.</p>
+<pre><code class="language-typescript">import { createDom, VDomNode } from &quot;./v-dom&quot;
+
+interface Fiber {
+    parent: Fiber | null
+    sibling: Fiber | null
+    child: Fiber | null
+    vDom: VDomNode,
+    dom: HTMLElement | Text  | null
+}
+
+let nextUnitOfWork: Fiber | null = null
+
+function workLoop(deadline: IdleDeadline) {
+  let shouldYield = false
+  while (nextUnitOfWork &amp;&amp; !shouldYield) {
+    nextUnitOfWork = performUnitOfWork(
+      nextUnitOfWork
+    )
+    shouldYield = deadline.timeRemaining() &lt; 1
+  }
+  requestIdleCallback(workLoop)
+}
+
+requestIdleCallback(workLoop)
+
+function performUnitOfWork(nextUnitOfWork: Fiber | null): Fiber | null {
+    // TODO
+    throw new Error('Not implemented')
+}
+</code></pre>
+<p>If you now fill <code>// TODO</code> with rendering vDOM, and return the next vDOM node to be rendered, you can have a simple idle time rendering. But don't be hasty- we need more work.</p>
+<h2 id="fiber-tree">Fiber Tree</h2>
+<p>In the next chapter, we will implement reactivity, and the reconciliation is rather complicated- so we move some content into this part, that is the fiber tree.</p>
+<p>Fiber tree is just a special data structure. When react handles changes, it does the following process.</p>
+<ol>
+<li>Something, may be a user, or initial rendering, triggers a change.</li>
+<li>React creates a new vDOM tree.</li>
+<li>React calculate the new fiber tree.</li>
+<li>React calculates the difference between the old fiber tree and the new fiber tree.</li>
+<li>React applies the difference to the actual DOM.</li>
+</ol>
+<p>You can see, fiber tree is essential for React.</p>
+<p>The fiber tree, a little bit different from traditional tree, has three types of relations between nodes.</p>
+<ul>
+<li>child of: A node is a child of another node. Please note that, in fiber tree, every node can have only one child. The traditional tree structure is represented by a child with many siblings.</li>
+<li>sibling of: A node is a sibling of another node.</li>
+<li>parent of: A node is a parent of another node. Different from child of, many nodes can share the same parent. You can think parent node in fiber tree as a bad parent, who only cares about the first child, but is still, in fact, parent of many children.</li>
+</ul>
+<p>For example, for the following DOM,</p>
+<pre><code class="language-html">&lt;div&gt;
+    &lt;p&gt;&lt;/p&gt;
+    &lt;div&gt;
+        &lt;h1&gt;&lt;/h1&gt;
+        &lt;h2&gt;&lt;/h2&gt;
+    &lt;/div&gt;
+&lt;/div&gt;
+</code></pre>
+<p>We can represent it as a tree.</p>
+<pre><code>div
+├── p
+└── div
+    ├── h1
+    └── h2
+</code></pre>
+<p><code>p</code> is a child of the root <code>div</code>, but the secondary <code>div</code> is not a child of the root <code>div</code>, but a sibling of <code>p</code>. <code>h1</code> and <code>h2</code> are children of the secondary <code>div</code>.</p>
+<p>When it comes to rendering, the order is mainly depth-first, but kind of different- so basically, it follows these rules. For each node, it goes through the following steps.</p>
+<ol>
+<li>If this node has a unprocessed child, process the child.</li>
+<li>If this node has a sibling, process the sibling. Repeat until all siblings are processed.</li>
+<li>Mark this node as processed.</li>
+<li>Process its parent.</li>
+</ol>
+<p>Now let's implement that. But first, we need to trigger the rendering process. It is simple- just set the <code>nextUnitOfWork</code> to the root of the fiber tree.</p>
+<pre><code class="language-typescript">export function render(vDom: VDomNode, parent: HTMLElement) {
+    nextUnitOfWork = {
+        parent: null,
+        sibling: null,
+        child: null,
+        vDom: vDom,
+        dom: parent
+    }
+}
+</code></pre>
+<p>After triggering the rendering, browser will call <code>performUnitOfWork</code>, this is where we, well, perform the work.</p>
+<p>The first is that we need to create actual DOM elements. We can do this by creating a new DOM element, and append it to the parent DOM element.</p>
+<pre><code class="language-typescript">function isString(value: VDomNode): value is string {
+    return typeof value === 'string'
+}
+
+function isElement(value: VDomNode): value is VDomElement {
+    return typeof value === 'object'
+}
+
+export function createDom(vDom: VDomNode): HTMLElement | Text | DocumentFragment {
+    if (isString(vDom)) {
+        return document.createTextNode(vDom)
+    } else if (isElement(vDom)) {
+        const element = document.createElement(vDom.tag === '' ? 'div' : vDom.tag)
+        Object.entries(vDom.props ?? {}).forEach(([name, value]) =&gt; {
+            if (value === undefined) return
+            if (name === 'key') return
+            if (name.startsWith('on') &amp;&amp; value instanceof Function) {
+                element.addEventListener(name.slice(2).toLowerCase(), value as EventListener)
+            } else {
+                element.setAttribute(name, value.toString())
+            }
+        })
+        return element
+    } else {
+        throw new Error('Unexpected vDom type')
+    }
+}
+</code></pre>
+<pre><code class="language-typescript">function performUnitOfWork(nextUnitOfWork: Fiber | null): Fiber | null {
+    if(!nextUnitOfWork) {
+        return null
+    }
+
+    if(!nextUnitOfWork.dom) {
+        nextUnitOfWork.dom = createDom(nextUnitOfWork.vDom)
+    }
+
+    if(nextUnitOfWork.parent &amp;&amp; nextUnitOfWork.parent.dom) {
+        nextUnitOfWork.parent.dom.appendChild(nextUnitOfWork.dom)
+    }
+
+    // TODO
+    throw new Error('Not implemented')
+}
+</code></pre>
+<p>This is the first part of the work. Now we need to construct the fiber branching out from the current one.</p>
+<pre><code class="language-typescript">const fiber = nextUnitOfWork
+if (isElement(fiber.vDom)) {
+    const elements = fiber.vDom.children ?? []
+    let index = 0
+    let prevSibling = null
+
+    while (index &lt; elements.length) {
+        const element = elements[index]
+        const newFiber: Fiber = {
+            parent: fiber,
+            dom: null,
+            sibling: null,
+            child: null,
+            vDom: element,
+        }
+
+        if (index === 0) {
+            fiber.child = newFiber
+        } else {
+            prevSibling!.sibling = newFiber
+        }
+        prevSibling = newFiber
+        index++
+    }
+}
+</code></pre>
+<p>Now we have a fiber tree built for the current node. Now let's follow our rules to process the fiber tree.</p>
+<pre><code class="language-typescript">if (fiber.child) {
+    return fiber.child
+}
+let nextFiber: Fiber | null = fiber
+while (nextFiber) {
+    if (nextFiber.sibling) {
+        return nextFiber.sibling
+    }
+    nextFiber = nextFiber.parent
+}
+return null
+</code></pre>
+<p>Now we can render the vDOM, here it is. Please note that typescript is being stupid here since it can not tell the type of our virtual DOM, we need an ugly bypass here.</p>
+<pre><code class="language-typescript">import { render } from &quot;./runtime&quot;;
+import { createElement, fragment, VDomNode } from &quot;./v-dom&quot;;
+
+function App() {
+    return &lt;&gt;
+        &lt;h1&gt;a&lt;/h1&gt;
+        &lt;h2&gt;b&lt;/h2&gt;
+    &lt;/&gt;
+}
+const app = document.getElementById('app')
+const vDom: VDomNode = App() as unknown as VDomNode
+render(vDom, app!)
+</code></pre>
+<p>Now your vDOM is rendered to the actual DOM. Congratulations! You have done a great job. But we are not done yet.</p>
+<h2 id="cumulative-commit">Cumulative Commit</h2>
+<p>There will be a problem with the current implementation- if we have too many nodes that slows the whole process down, the user will see how the rendering is done. Of course, it won't leak commercial secrets or something, but it is not a good experience. We'd rather hide the dom creation behind the curtain, the submit it all at once.</p>
+<p>The solution is simple- instead of directly committing to the document, we create an element without adding it to the document, and when we are done, we add it to the document. This is called cumulative commit.</p>
+<pre><code class="language-typescript">let wip: Fiber | null = null
+let wipParent: HTMLElement | null = null
+
+export function render(vDom: VDomNode, parent: HTMLElement) {
+    wip = {
+        parent: null,
+        sibling: null,
+        child: null,
+        vDom: vDom,
+        dom: null,
+    }
+    wipParent = parent
+    nextUnitOfWork = wip
+}
+</code></pre>
+<p>Now, we remove the <code>appendChild</code> from <code>performUnitOfWork</code>, that is, the following part,</p>
+<pre><code class="language-typescript">if(nextUnitOfWork.parent &amp;&amp; nextUnitOfWork.parent.dom) {
+    nextUnitOfWork.parent.dom.appendChild(nextUnitOfWork.dom)
+}
+</code></pre>
+<p>Now if we finish all the work, we have all the fiber correctly built up with their DOM, but they are not added to the document. When such event dispatches, we call a <code>commit</code> function, which will add the DOM to the document.</p>
+<pre><code class="language-typescript">function commit() {
+
+}
+
+function workLoop(deadline: IdleDeadline) {
+  let shouldYield = false
+  while (nextUnitOfWork &amp;&amp; !shouldYield) {
+    nextUnitOfWork = performUnitOfWork(
+      nextUnitOfWork
+    )
+    if(!nextUnitOfWork &amp;&amp; wip) {
+        commit()
+    }
+    shouldYield = deadline.timeRemaining() &lt; 1
+  }
+  requestIdleCallback(workLoop)
+}
+</code></pre>
+<p>Now, the commit function is simple- just add all the children DOM recursively to the <code>wip</code>, then commit <code>wip</code> to the DOM.</p>
+<pre><code class="language-typescript">function commit() {
+    function commitChildren(fiber: Fiber | null) {
+        if(!fiber) {
+            return
+        }
+        if(fiber.dom &amp;&amp; fiber.parent?.dom) {
+            fiber.parent.dom.appendChild(fiber.dom)
+        }
+        commitChildren(fiber.child)
+        commitChildren(fiber.sibling)
+    }
+    commitChildren(wip)
+    wipParent?.appendChild(wip!.dom!)
+    wip = null
+}
+</code></pre>
+<p>You can test this out by adding a timeout to <code>commitChildren</code> function. previously, the rendering was done step by step, but now it is done all at once.</p>
+<h2 id="nested-components">Nested Components</h2>
+<p>You may try nested functions- like the following,</p>
+<pre><code class="language-tsx">import { render } from &quot;./runtime&quot;;
+import { createElement, fragment, VDomNode } from &quot;./v-dom&quot;;
+
+function App() {
+    return &lt;&gt;
+        &lt;h1&gt;a&lt;/h1&gt;
+        &lt;h2&gt;b&lt;/h2&gt;
+        &lt;div&gt;
+            &lt;h3&gt;c&lt;/h3&gt;
+        &lt;/div&gt;
+    &lt;/&gt;
+}
+
+function Wrapper() {
+    return &lt;div&gt;
+        &lt;h1&gt;a&lt;/h1&gt;
+        &lt;h2&gt;b&lt;/h2&gt;
+        &lt;div&gt;
+            &lt;h3&gt;&lt;App/&gt;&lt;/h3&gt;
+        &lt;/div&gt;
+    &lt;/div&gt;
+}
+const app = document.getElementById('app')
+const vDom: VDomNode = Wrapper() as unknown as VDomNode
+render(vDom, app!)
+</code></pre>
+<p>But it won't work, since when parsing the JSX, <code>tag</code> is just the label name. Sure, for native elements, it is just a string, but for components, it is a function. So in the process of converting JSX to vDOM, we need to check if the tag is a function, and if so, call it.</p>
+<pre><code class="language-typescript">export function createElement(tag: string | Function, props: VDomAttributes, ...children: VDomNode[]): VDomElement {
+    if (tag instanceof Function) {
+        return tag(props, children)
+    }
+    return {
+        kind: tag === '' ? 'fragment' : 'element',
+        tag,
+        children,
+        props: props ?? {},
+        key: props?.key ?? undefined
+    }
+}
+</code></pre>
+<p>Now, <code>props</code> and <code>children</code> are required for each component. In real React, they added extra field to check- you can imagine, just by replacing functions with classes, so you have extra fields- then you provide new function to create objects, a typical factory pattern- but we take a lazy we here.</p>
+<pre><code class="language-typescript">import { render } from &quot;./runtime&quot;;
+import { createElement, fragment, VDomAttributes, VDomNode } from &quot;./v-dom&quot;;
+
+type FuncComponent = (props: VDomAttributes, children: VDomNode[]) =&gt; JSX.Element
+
+const Wrapper: FuncComponent = (_: VDomAttributes, __: VDomNode[]) =&gt; {
+    return &lt;div&gt;
+        &lt;&gt;
+            &lt;p&gt;aa&lt;/p&gt;
+        &lt;/&gt;
+    &lt;/div&gt;
+}
+const app = document.getElementById('app')
+const vDom: VDomNode = Wrapper({}, []) as unknown as VDomNode
+console.log(vDom)
+render(vDom, app!)
+</code></pre>
+<p>Please note that in the real React, the function component call is delayed to the fiber building stage. Nonetheless, we did so for convenience, and it doesn't really harm the purpose of this series.</p>
+<h2 id="fragment">Fragment</h2>
+<p>However, it's still not enough. Previously, we just treated fragment as <code>div</code>, which is not correct. But if you just replace that with a document fragment, it won't work. The reason for this is because fragments is a one-time container- which leads to a strange behaviour- like you cannot take real things out of it, and you can not nest them, and many strange things (really, why it just won't work simpler...). So, fuck, we need to dig this shit up.</p>
+<p>So the solution is that, we do not create DOM for fragment- we find the correct parent to add the DOM.</p>
+<p>We need,</p>
+<pre><code class="language-typescript">export function isFragment(value: VDomNode): value is VDomElement {
+    return isElement(value) &amp;&amp; value.kind === 'fragment'
+}
+</code></pre>
+<p>And change the rendering,</p>
+<pre><code class="language-typescript">function commit() {
+    function commitChildren(fiber: Fiber | null) {
+        if(!fiber) {
+            return
+        }
+        if(fiber.dom &amp;&amp; fiber.parent?.dom) {
+            fiber.parent?.dom?.appendChild(fiber.dom)
+        }
+
+        if(fiber.dom &amp;&amp; fiber.parent &amp;&amp; isFragment(fiber.parent.vDom)) {
+            let parent = fiber.parent
+            // find the first parent that is not a fragment
+            while(parent &amp;&amp; isFragment(parent.vDom)) {
+                // the root element is guaranteed to not be a fragment has has a non-fragment parent
+                parent = parent.parent!
+            }
+            parent.dom?.appendChild(fiber.dom!)
+        }
+
+        commitChildren(fiber.child)
+        commitChildren(fiber.sibling)
+    }
+    commitChildren(wip)
+    wipParent?.appendChild(wip!.dom!)
+    wip = null
+}
+</code></pre>
+<p>Now, the fragment is correctly handled.</p></div>
+            </div>
+        </div>
+
+        <footer class="col-md-12">
+            <hr>
+            <p>Documentation built with <a href="https://www.mkdocs.org/">MkDocs</a>.</p>
+        </footer>
+        <script src="../js/jquery-3.6.0.min.js"></script>
+        <script src="../js/bootstrap.min.js"></script>
+        <script>
+            var base_url = "..",
+                shortcuts = {"help": 191, "next": 78, "previous": 80, "search": 83};
+        </script>
+        <script src="../js/base.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.4/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+        <script src="../search/main.js"></script>
+
+        <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="searchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="searchModalLabel">Search</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+                <p>From here you can search these documents. Enter your search terms below.</p>
+                <form>
+                    <div class="form-group">
+                        <input type="search" class="form-control" placeholder="Search..." id="mkdocs-search-query" title="Type search term here">
+                    </div>
+                </form>
+                <div id="mkdocs-search-results" data-no-results-text="No results found"></div>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div><div class="modal" id="mkdocs_keyboard_modal" tabindex="-1" role="dialog" aria-labelledby="keyboardModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="keyboardModalLabel">Keyboard Shortcuts</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 20%;">Keys</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="help shortcut"><kbd>?</kbd></td>
+                    <td>Open this help</td>
+                  </tr>
+                  <tr>
+                    <td class="next shortcut"><kbd>n</kbd></td>
+                    <td>Next page</td>
+                  </tr>
+                  <tr>
+                    <td class="prev shortcut"><kbd>p</kbd></td>
+                    <td>Previous page</td>
+                  </tr>
+                  <tr>
+                    <td class="search shortcut"><kbd>s</kbd></td>
+                    <td>Search</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div>
+
+    </body>
+</html>

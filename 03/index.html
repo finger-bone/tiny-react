@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        
+        <link rel="canonical" href="https://finger-bone.github.io/tiny-react/03/">
+        <link rel="shortcut icon" href="../img/favicon.ico">
+        <title>Updating vDOM - Build Your Own React</title>
+        <link href="../css/bootstrap.min.css" rel="stylesheet">
+        <link href="../css/font-awesome.min.css" rel="stylesheet">
+        <link href="../css/base.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/color-brewer.min.css">
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+        <script>hljs.highlightAll();</script> 
+    </head>
+
+    <body>
+        <div class="navbar fixed-top navbar-expand-lg navbar-dark bg-primary">
+            <div class="container">
+                <a class="navbar-brand" href="..">Build Your Own React</a>
+                <!-- Expander button -->
+                <button type="button" class="navbar-toggler" data-toggle="collapse" data-target="#navbar-collapse">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+
+                <!-- Expanded navigation -->
+                <div id="navbar-collapse" class="navbar-collapse collapse">
+                        <!-- Main navigation -->
+                        <ul class="nav navbar-nav">
+                            <li class="navitem">
+                                <a href="../01/" class="nav-link">JSX</a>
+                            </li>
+                            <li class="navitem">
+                                <a href="../02/" class="nav-link">Rendering vDOM</a>
+                            </li>
+                            <li class="navitem active">
+                                <a href="./" class="nav-link">Updating vDOM</a>
+                            </li>
+                            <li class="navitem">
+                                <a href="../04/" class="nav-link">Hooks</a>
+                            </li>
+                        </ul>
+
+                    <ul class="nav navbar-nav ml-auto">
+                        <li class="nav-item">
+                            <a href="#" class="nav-link" data-toggle="modal" data-target="#mkdocs_search_modal">
+                                <i class="fa fa-search"></i> Search
+                            </a>
+                        </li>
+                            <li class="nav-item">
+                                <a rel="prev" href="../02/" class="nav-link">
+                                    <i class="fa fa-arrow-left"></i> Previous
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a rel="next" href="../04/" class="nav-link">
+                                    Next <i class="fa fa-arrow-right"></i>
+                                </a>
+                            </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="row">
+                    <div class="col-md-3"><div class="navbar-light navbar-expand-md bs-sidebar hidden-print affix" role="complementary">
+    <div class="navbar-header">
+        <button type="button" class="navbar-toggler collapsed" data-toggle="collapse" data-target="#toc-collapse" title="Table of Contents">
+            <span class="fa fa-angle-down"></span>
+        </button>
+    </div>
+
+    
+    <div id="toc-collapse" class="navbar-collapse collapse card bg-secondary">
+        <ul class="nav flex-column">
+            
+            <li class="nav-item" data-level="1"><a href="#tiny-react-ch3-updating-vdom" class="nav-link">Tiny React Ch3 Updating vDOM</a>
+              <ul class="nav flex-column">
+            <li class="nav-item" data-level="2"><a href="#save-the-old-fiber" class="nav-link">Save the Old Fiber</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-level="2"><a href="#reconciliation" class="nav-link">Reconciliation</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-level="2"><a href="#summary" class="nav-link">Summary</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+              </ul>
+            </li>
+        </ul>
+    </div>
+</div></div>
+                    <div class="col-md-9" role="main">
+
+<h1 id="tiny-react-ch3-updating-vdom">Tiny React Ch3 Updating vDOM</h1>
+<p>Now let's talk about the reactivity.</p>
+<h2 id="save-the-old-fiber">Save the Old Fiber</h2>
+<p>We need to save the old fiber so that we can compare it with the new fiber. We can do this by adding a field to the fiber. We also need a committed field- which will be useful later.</p>
+<pre><code class="language-typescript">export interface Fiber {
+  type: string
+  props: VDomAttributes
+  parent: Fiber | null
+  child: Fiber | null
+  sibling: Fiber | null
+  dom: HTMLElement | Text | null
+  alternate: Fiber | null
+  committed: boolean
+}
+</code></pre>
+<p>Then we set the <code>committed</code> state here,</p>
+<pre><code class="language-typescript">function commit() {
+    function commitChildren(fiber: Fiber | null) {
+        if(!fiber) {
+            return
+        }
+        if(fiber.dom &amp;&amp; fiber.parent?.dom) {
+            fiber.parent.dom.appendChild(fiber.dom)
+            fiber.committed = true
+        }
+        if(fiber.dom &amp;&amp; fiber.parent &amp;&amp; isFragment(fiber.parent.vDom) &amp;&amp; !fiber.committed) {
+            let parent = fiber.parent
+            // find the first parent that is not a fragment
+            while(parent &amp;&amp; isFragment(parent.vDom)) {
+                // the root element is guaranteed to not be a fragment has has a non-fragment parent
+                parent = parent.parent!
+            }
+            parent.dom?.appendChild(fiber.dom!)
+            fiber.committed = true
+        }
+        commitChildren(fiber.child)
+        commitChildren(fiber.sibling)
+    }
+    commitChildren(wip)
+    wipParent?.appendChild(wip!.dom!)
+    wip!.committed = true
+    wip = null
+}
+</code></pre>
+<p>We also need to save the old fiber tree.</p>
+<pre><code class="language-typescript">let oldFiber: Fiber | null = null
+
+function commit() {
+    function commitChildren(fiber: Fiber | null) {
+        if(!fiber) {
+            return
+        }
+        if(fiber.dom &amp;&amp; fiber.parent?.dom) {
+            fiber.parent.dom.appendChild(fiber.dom)
+            fiber.committed = true
+        }
+        commitChildren(fiber.child)
+        commitChildren(fiber.sibling)
+    }
+    commitChildren(wip)
+    wipParent?.appendChild(wip!.dom!)
+    wip!.committed = true
+    oldFiber = wip
+    wip = null
+}
+</code></pre>
+<p>Now, we need to compare the old fiber with the new fiber during iteration. This is called the reconciliation process.</p>
+<h2 id="reconciliation">Reconciliation</h2>
+<p>We need to compare the old fiber with the new fiber. We first put the old fiber in the initial work.</p>
+<pre><code class="language-typescript">export function render(vDom: VDomNode, parent: HTMLElement) {
+    wip = {
+        parent: null,
+        sibling: null,
+        child: null,
+        vDom: vDom,
+        dom: null,
+        committed: false,
+        alternate: oldFiber,
+    }
+    wipParent = parent
+    nextUnitOfWork = wip
+}
+</code></pre>
+<p>Then we separate the creation of the new fiber into a new function.</p>
+<pre><code class="language-typescript">function reconcile(fiber: Fiber, isFragment: boolean) {
+    if (isElement(fiber.vDom)) {
+        const elements = fiber.vDom.children ?? []
+        let index = 0
+        let prevSibling = null
+
+        while (index &lt; elements.length) {
+            const element = elements[index]
+            const newFiber: Fiber = {
+                parent: isFragment ? fiber.parent : fiber,
+                dom: null,
+                sibling: null,
+                child: null,
+                vDom: element,
+                committed: false,
+                alternate: null,
+            }
+
+            if (index === 0) {
+                fiber.child = newFiber
+            } else {
+                prevSibling!.sibling = newFiber
+            }
+            prevSibling = newFiber
+            index++
+        }
+    }
+}
+
+function performUnitOfWork(nextUnitOfWork: Fiber | null): Fiber | null {
+    if(!nextUnitOfWork) {
+        return null
+    }
+    const fiber = nextUnitOfWork
+    const isFragment = isElement(fiber.vDom) &amp;&amp; fiber.vDom.tag === '' &amp;&amp; fiber.vDom.kind === 'fragment'
+
+    if(!fiber.dom &amp;&amp; !isFragment) {
+        fiber.dom = createDom(fiber.vDom)
+    }
+
+    reconcile(fiber, isFragment)
+
+    if (fiber.child) {
+        return fiber.child
+    }
+    let nextFiber: Fiber | null = fiber
+    while (nextFiber) {
+        if (nextFiber.sibling) {
+          return nextFiber.sibling
+        }
+        nextFiber = nextFiber.parent
+    }
+    return null
+}
+</code></pre>
+<p>However, we need to mount the old fiber onto the new one.</p>
+<pre><code class="language-typescript">function reconcile(fiber: Fiber, isFragment: boolean) {
+    if (isElement(fiber.vDom)) {
+        const elements = fiber.vDom.children ?? []
+        let index = 0
+        let prevSibling = null
+
+        let currentOldFiber = fiber.alternate?.child ?? null
+        while (index &lt; elements.length) {
+            const element = elements[index]
+            const newFiber: Fiber = {
+                parent: isFragment ? fiber.parent : fiber,
+                dom: null,
+                sibling: null,
+                child: null,
+                vDom: element,
+                committed: false,
+                alternate: currentOldFiber,
+            }
+
+            if (index === 0) {
+                fiber.child = newFiber
+            } else {
+                prevSibling!.sibling = newFiber
+            }
+            prevSibling = newFiber
+            currentOldFiber = currentOldFiber?.sibling ?? null
+            index++
+        }
+    }
+}
+</code></pre>
+<p>Now we have the old fiber mounted to the new fiber. But we don't have anything to trigger the re-rendering- for now, we manually trigger it by adding a button. Since we don't yet have state yet, we use <code>props</code> for mutating the vDOM.</p>
+<pre><code class="language-tsx">import { render } from &quot;./runtime&quot;;
+import { createElement, fragment, VDomAttributes, VDomNode } from &quot;./v-dom&quot;;
+
+type FuncComponent = (props: VDomAttributes, children: VDomNode[]) =&gt; JSX.Element
+
+const App: FuncComponent = (props: VDomAttributes, __: VDomNode[]) =&gt; {
+    return &lt;div&gt;
+        &lt;&gt;
+            &lt;h1&gt;H1&lt;/h1&gt;
+            &lt;h2&gt;{props[&quot;example&quot;]?.toString()}&lt;/h2&gt;
+            {
+                props[&quot;show&quot;] ? &lt;p&gt;show&lt;/p&gt; : &lt;&gt;&lt;/&gt;
+            }
+            &lt;h1&gt;H1&lt;/h1&gt;
+        &lt;/&gt;
+    &lt;/div&gt;
+}
+const app = document.getElementById('app')
+
+const renderButton = document.createElement('button')
+renderButton.textContent = 'Render'
+let cnt = 0
+renderButton.addEventListener('click', () =&gt; {
+    const vDom: VDomNode = App({
+        &quot;example&quot;: (new Date()).toString(),
+        &quot;show&quot;: cnt % 2 === 0
+    }, []) as unknown as VDomNode
+    cnt++
+    render(vDom, app!)
+})
+document.body.appendChild(renderButton)
+</code></pre>
+<p>Now if you click the <code>renderButton</code>, the rendered result will repeat once, since, well, all our current logic is simply putting the rendered vDOM into the document.</p>
+<p>If you add a <code>console.log</code> in the commit function, you can see the alternate fiber being printed out.</p>
+<p>Now we need to define how we handle the old fiber and the new fiber, and mutate the DOM based on the information. The rules is as follows.</p>
+<p>For each new fiber,</p>
+<ul>
+<li>If there was an old fiber, we compare the content of the old fiber with the new fiber, if they are different, we replace the old DOM node with the new DOM node, or else we copy the old DOM node to the new DOM node. Please note that, by two vDOM being equal, we mean their tags and all properties are equal. Their children can be different.</li>
+<li>If there has no old fiber, we create a new DOM node and append it to the parent.</li>
+<li>If, for the new fiber, it doesn't have a child or a sibling, but its old fiber has a child or a sibling, we recursively remove the old child or sibling.</li>
+</ul>
+<p>Kind of confused? Well, I'll just show the code. We first delete the old DOM creation. Then apply the rules above.</p>
+<p>The first rule, if there is an old fiber, we compare the content of the old fiber with the new fiber. If they are different, we replace the old DOM node with the new DOM node, or else we copy the old DOM node to the new DOM node.</p>
+<pre><code class="language-typescript">export function vDOMEquals(a: VDomNode, b: VDomNode): boolean {
+    if (isString(a) &amp;&amp; isString(b)) {
+        return a === b
+    } else if (isElement(a) &amp;&amp; isElement(b)) {
+        let ret = a.tag === b.tag &amp;&amp; a.key === b.key
+        if (!ret) return false
+        if (a.props &amp;&amp; b.props) {
+            const aProps = a.props
+            const bProps = b.props
+            const aKeys = Object.keys(aProps)
+            const bKeys = Object.keys(bProps)
+            if (aKeys.length !== bKeys.length) return false
+            for (let i = 0; i &lt; aKeys.length; i++) {
+                const key = aKeys[i]
+                if (key === 'key') continue
+                if (aProps[key] !== bProps[key]) return false
+            }
+            for (let i = 0; i &lt; bKeys.length; i++) {
+                const key = bKeys[i]
+                if (key === 'key') continue
+                if (aProps[key] !== bProps[key]) return false
+            }
+            return true
+        } else {
+            return a.props === b.props
+        }
+    } else {
+        return false
+    }
+}
+</code></pre>
+<p>Then I made some small refactor,</p>
+<pre><code class="language-typescript">function buildDom(fiber: Fiber, fiberIsFragment: boolean) {
+    if(fiber.dom) return
+    if(fiberIsFragment) return
+    fiber.dom = createDom(fiber.vDom)
+}
+
+function performUnitOfWork(nextUnitOfWork: Fiber | null): Fiber | null {
+    if(!nextUnitOfWork) {
+        return null
+    }
+    const fiber = nextUnitOfWork
+    const fiberIsFragment = isFragment(fiber.vDom)
+
+    reconcile(fiber)
+
+    buildDom(fiber, fiberIsFragment);
+
+    if (fiber.child) {
+        return fiber.child
+    }
+    let nextFiber: Fiber | null = fiber
+    while (nextFiber) {
+        if (nextFiber.sibling) {
+          return nextFiber.sibling
+        }
+        nextFiber = nextFiber.parent
+    }
+    return null
+}
+</code></pre>
+<p>Now, when it comes to commit, we have an extra <code>alternative</code> field to compare the old fiber with the new fiber.</p>
+<p>This is the original commit function,</p>
+<pre><code class="language-typescript">
+function commit() {
+    function commitChildren(fiber: Fiber | null) {
+        if(!fiber) {
+            return
+        }
+        if(fiber.dom &amp;&amp; fiber.parent?.dom) {
+            fiber.parent?.dom?.appendChild(fiber.dom)
+            fiber.committed = true
+        }
+
+        if(fiber.dom &amp;&amp; fiber.parent &amp;&amp; isFragment(fiber.parent.vDom) &amp;&amp; !fiber.committed) {
+            let parent = fiber.parent
+            // find the first parent that is not a fragment
+            while(parent &amp;&amp; isFragment(parent.vDom)) {
+                // the root element is guaranteed to not be a fragment has has a non-fragment parent
+                parent = parent.parent!
+            }
+            parent.dom?.appendChild(fiber.dom!)
+            fiber.committed = true
+        }
+
+        commitChildren(fiber.child)
+        commitChildren(fiber.sibling)
+    }
+    commitChildren(wip)
+    wipParent?.appendChild(wip!.dom!)
+    wip!.committed = true
+    oldFiber = wip
+    wip = null
+}
+</code></pre>
+<p>We will change the name a bit. The old name is just wrong (I'm sorry for that).</p>
+<pre><code class="language-typescript">function commit() {
+    function commitToParent(fiber: Fiber | null) {
+        if(!fiber) {
+            return
+        }
+        if(fiber.dom &amp;&amp; fiber.parent?.dom) {
+            fiber.parent?.dom?.appendChild(fiber.dom)
+            fiber.committed = true
+        }
+
+        if(fiber.dom &amp;&amp; fiber.parent &amp;&amp; isFragment(fiber.parent.vDom) &amp;&amp; !fiber.committed) {
+            let parent = fiber.parent
+            // find the first parent that is not a fragment
+            while(parent &amp;&amp; isFragment(parent.vDom)) {
+                // the root element is guaranteed to not be a fragment has has a non-fragment parent
+                parent = parent.parent!
+            }
+            parent.dom?.appendChild(fiber.dom!)
+            fiber.committed = true
+        }
+
+        commitToParent(fiber.child)
+        commitToParent(fiber.sibling)
+    }
+    commitToParent(wip)
+    wipParent?.appendChild(wip!.dom!)
+    wip!.committed = true
+    oldFiber = wip
+    wip = null
+}
+</code></pre>
+<h3 id="appending-copying-and-replacing">Appending, Copying and Replacing</h3>
+<p>So what should we do? Our old logic is only appending, so we extract that,</p>
+<pre><code class="language-typescript">function commit() {
+    function append(fiber: Fiber) {
+        if(!fiber.dom) return
+
+        if(fiber.dom &amp;&amp; fiber.parent?.dom) {
+            fiber.parent?.dom?.appendChild(fiber.dom)
+            fiber.committed = true
+        }
+
+        if(fiber.dom &amp;&amp; fiber.parent &amp;&amp; isFragment(fiber.parent.vDom) &amp;&amp; !fiber.committed) {
+            let parent = fiber.parent
+            // find the first parent that is not a fragment
+            while(parent &amp;&amp; isFragment(parent.vDom)) {
+                // the root element is guaranteed to not be a fragment has has a non-fragment parent
+                parent = parent.parent!
+            }
+            parent.dom?.appendChild(fiber.dom!)
+            fiber.committed = true
+        }
+    }
+
+    function commitToParent(fiber: Fiber | null) {
+        if(!fiber) {
+            return
+        }
+
+        append(fiber)
+
+        commitToParent(fiber.child)
+        commitToParent(fiber.sibling)
+    }
+    commitToParent(wip)
+    wipParent?.appendChild(wip!.dom!)
+    wip!.committed = true
+    oldFiber = wip
+    wip = null
+}
+</code></pre>
+<p>We need to delay the construction of the DOM until the commit phase, to provide more flexibility.</p>
+<pre><code class="language-typescript">function commit() {
+    function append(fiber: Fiber) {
+        if(isFragment(fiber.vDom)) return;
+        fiber.dom = createDom(fiber.vDom)
+
+        if(fiber.dom &amp;&amp; fiber.parent?.dom) {
+            fiber.parent?.dom?.appendChild(fiber.dom)
+            fiber.committed = true
+        }
+
+        if(fiber.dom &amp;&amp; fiber.parent &amp;&amp; isFragment(fiber.parent.vDom) &amp;&amp; !fiber.committed) {
+            let parent = fiber.parent
+            // find the first parent that is not a fragment
+            while(parent &amp;&amp; isFragment(parent.vDom)) {
+                // the root element is guaranteed to not be a fragment has has a non-fragment parent
+                parent = parent.parent!
+            }
+            parent.dom?.appendChild(fiber.dom!)
+            fiber.committed = true
+        }
+    }
+
+    function commitToParent(fiber: Fiber | null) {
+        if(!fiber) {
+            return
+        }
+
+        append(fiber)
+
+        commitToParent(fiber.child)
+        commitToParent(fiber.sibling)
+    }
+    commitToParent(wip)
+    wipParent?.appendChild(wip!.dom!)
+    wip!.committed = true
+    oldFiber = wip
+    wip = null
+}
+
+function reconcile(fiber: Fiber) {
+    if (isElement(fiber.vDom)) {
+        const elements = fiber.vDom.children ?? []
+        let index = 0
+        let prevSibling = null
+
+        let currentOldFiber = fiber.alternate?.child ?? null
+        while (index &lt; elements.length) {
+            const element = elements[index]
+            const newFiber: Fiber = {
+                parent: fiber,
+                dom: null,
+                sibling: null,
+                child: null,
+                vDom: element,
+                committed: false,
+                alternate: currentOldFiber,
+            }
+
+            if (index === 0) {
+                fiber.child = newFiber
+            } else {
+                prevSibling!.sibling = newFiber
+            }
+            prevSibling = newFiber
+            currentOldFiber = currentOldFiber?.sibling ?? null
+            index++
+        }
+    }
+}
+</code></pre>
+<p>Following the first and second rule, we refactor them into the following code,</p>
+<pre><code class="language-typescript">
+function commit() {
+    function findNonFragmentParent(fiber: Fiber): Fiber | null {
+        let parent = fiber.parent
+        while(parent &amp;&amp; isFragment(parent.vDom)) {
+            parent = parent.parent!
+        }
+        return parent
+    }
+
+    function append(fiber: Fiber) {
+        if(isFragment(fiber.vDom)) return;
+
+        if(fiber.dom &amp;&amp; fiber.parent?.dom) {
+            fiber.parent?.dom?.appendChild(fiber.dom)
+            fiber.committed = true
+        }
+
+        if(fiber.dom &amp;&amp; fiber.parent &amp;&amp; isFragment(fiber.parent.vDom) &amp;&amp; !fiber.committed) {
+            const parent = findNonFragmentParent(fiber);
+            parent?.dom?.appendChild(fiber.dom!)
+            fiber.committed = true
+        }
+    }
+
+    function commitToParent(fiber: Fiber | null) {
+        if(!fiber) {
+            return
+        }
+
+        if(!fiber.alternate &amp;&amp; !isFragment(fiber.vDom)) {
+            fiber.dom = createDom(fiber.vDom)
+            append(fiber)
+        }
+        if(fiber.alternate &amp;&amp; vDOMEquals(fiber.vDom, fiber.alternate.vDom)) {
+            fiber.dom = fiber.alternate.dom
+            append(fiber)
+        }
+        if(fiber.alternate &amp;&amp; !vDOMEquals(fiber.vDom, fiber.alternate.vDom) &amp;&amp; !isFragment(fiber.vDom)) {
+            fiber.dom = createDom(fiber.vDom)
+            fiber.alternate.dom?.replaceWith(fiber.dom)
+            append(fiber)
+        }
+
+        commitToParent(fiber.child)
+        commitToParent(fiber.sibling)
+    }
+    commitToParent(wip)
+    wipParent?.appendChild(wip!.dom!)
+    wip!.committed = true
+    oldFiber = wip
+    wip = null
+}
+</code></pre>
+<p>Please always keep in mind that in javascript, all values are references. If we have <code>fiber.dom = fiber.alternate.dom</code>, then <code>fiber.dom</code> and <code>fiber.alternate.dom</code> will point to the same object. If we change <code>fiber.dom</code>, <code>fiber.alternate.dom</code> will also change, and vice versa. That's why when replacing, we simply used <code>fiber.alternate.dom?.replaceWith(fiber.dom)</code>. This will replace the old DOM with the new DOM. While previous parents, if copied, have the <code>fiber.alternate.dom</code> for their DOM, their DOM will also be replaced.</p>
+<p>However, we hadn't handled deletion yet.</p>
+<h3 id="some-mishaps">Some Mishaps</h3>
+<p>Okay, previous code contains some bugs that I spotted as I am writing more complex jsx, so, before implementing the deletion, let's fix them.</p>
+<p>Previously there was a bug- we can not pass list to <code>props</code>, let's use this chance to fix it.</p>
+<pre><code class="language-typescript">export type VDomAttributes = { 
+    key?: string | number
+    [_: string]: unknown | undefined
+}
+</code></pre>
+<p>Then you just fix the type things- only one error for me, so, do it yourself please.</p>
+<p>However, if we have the following code,</p>
+<pre><code class="language-typescript">import { render } from &quot;./runtime&quot;;
+import { createElement, fragment, VDomAttributes, VDomNode } from &quot;./v-dom&quot;;
+
+type FuncComponent = (props: VDomAttributes, children: VDomNode[]) =&gt; JSX.Element
+
+const App: FuncComponent = (props: VDomAttributes, __: VDomNode[]) =&gt; {
+    return &lt;div&gt;
+            {
+                props[&quot;show&quot;] ? &lt;h2&gt;show&lt;/h2&gt; : &lt;&gt;&lt;/&gt;
+            }
+            &lt;ul&gt;
+                {
+                    (props[&quot;list&quot;] as Array&lt;number&gt;).map((i) =&gt; {
+                        return (&lt;ul&gt;{i}&lt;/ul&gt;)
+                    })
+                }
+            &lt;/ul&gt;
+    &lt;/div&gt;
+}
+const app = document.getElementById('app')
+
+const renderButton = document.createElement('button')
+renderButton.textContent = 'Render'
+let cnt = 0
+renderButton.addEventListener('click', () =&gt; {
+    const vDom: VDomNode = App({
+        &quot;example&quot;: (new Date()).toString(),
+        &quot;show&quot;: cnt % 2 === 0,
+        &quot;list&quot;: Array.from({ length: 10 - cnt }, (_, i) =&gt; i)
+    }, []) as unknown as VDomNode
+    cnt++
+    console.log(vDom)
+    render(vDom, app!)
+})
+document.body.appendChild(renderButton)
+</code></pre>
+<p>Our thing broke again... </p>
+<p>Okay, this is because children can be nested arrays in the above case, we need to flat them.</p>
+<p>But that's not enough, ugh, our <code>createDom</code> only recognize either string or element, not integer, so, we need <code>toString</code> the numbers.</p>
+<pre><code class="language-typescript">(props[&quot;list&quot;] as Array&lt;number&gt;).map((i) =&gt; {
+    return (&lt;ul&gt;{i.toString()}&lt;/ul&gt;)
+})
+</code></pre>
+<p>Okay, things work now- kind of.</p>
+<p>If you hit the render button, the list is updated- but the old element still remains. We need to delete the old element.</p>
+<h3 id="remove">Remove</h3>
+<p>We restate the rule here- for any new fiber, if it does not have a child or a sibling, but its old fiber has a child or a sibling, we recursively remove the old child or sibling.</p>
+<pre><code class="language-typescript">function recursiveRemoveRelated(fiber: Fiber | null) {
+    if(!fiber) {
+        return
+    }
+    if(fiber.sibling) {
+        recursiveRemoveRelated(fiber.sibling)
+        fiber.sibling.dom?.remove()
+    }
+    if(fiber.child) {
+        recursiveRemoveRelated(fiber.child)
+        fiber.child.dom?.remove()
+    }
+}
+if(fiber.alternate?.child &amp;&amp; !fiber.child) {
+    recursiveRemoveRelated(fiber.alternate.child)
+    fiber.alternate.child.dom?.remove()
+}
+if(fiber.alternate?.sibling &amp;&amp; !fiber.sibling) {
+    recursiveRemoveRelated(fiber.alternate.sibling)
+    fiber.alternate.sibling.dom?.remove()
+}
+</code></pre>
+<p>If you don't do recursive remove, some old elements will dangle when you have multiple things requires deletion. You can change to,</p>
+<pre><code class="language-typescript">renderButton.addEventListener('click', () =&gt; {
+    const vDom: VDomNode = App({
+        &quot;example&quot;: (new Date()).toString(),
+        &quot;show&quot;: cnt % 2 === 0,
+        &quot;list&quot;: Array.from({ length: 10 - cnt * 2 }, (_, i) =&gt; i)
+    }, []) as unknown as VDomNode
+    cnt++
+    console.log(vDom)
+    render(vDom, app!)
+})
+</code></pre>
+<p>For reference.</p>
+<h2 id="summary">Summary</h2>
+<p>This is a hard chapter- but pretty traditional coding, to be honest. However, up to now, you have understand how React works from bottom to top.</p>
+<p>Actually, things can already work now- we can manually trigger a re-render whenever we change the props. However, such frustrating manual work is not what we want. We want the reactivity to be automatic. So, we will talk about hooks in the next chapter.</p></div>
+            </div>
+        </div>
+
+        <footer class="col-md-12">
+            <hr>
+            <p>Documentation built with <a href="https://www.mkdocs.org/">MkDocs</a>.</p>
+        </footer>
+        <script src="../js/jquery-3.6.0.min.js"></script>
+        <script src="../js/bootstrap.min.js"></script>
+        <script>
+            var base_url = "..",
+                shortcuts = {"help": 191, "next": 78, "previous": 80, "search": 83};
+        </script>
+        <script src="../js/base.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.4/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+        <script src="../search/main.js"></script>
+
+        <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="searchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="searchModalLabel">Search</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+                <p>From here you can search these documents. Enter your search terms below.</p>
+                <form>
+                    <div class="form-group">
+                        <input type="search" class="form-control" placeholder="Search..." id="mkdocs-search-query" title="Type search term here">
+                    </div>
+                </form>
+                <div id="mkdocs-search-results" data-no-results-text="No results found"></div>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div><div class="modal" id="mkdocs_keyboard_modal" tabindex="-1" role="dialog" aria-labelledby="keyboardModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="keyboardModalLabel">Keyboard Shortcuts</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 20%;">Keys</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="help shortcut"><kbd>?</kbd></td>
+                    <td>Open this help</td>
+                  </tr>
+                  <tr>
+                    <td class="next shortcut"><kbd>n</kbd></td>
+                    <td>Next page</td>
+                  </tr>
+                  <tr>
+                    <td class="prev shortcut"><kbd>p</kbd></td>
+                    <td>Previous page</td>
+                  </tr>
+                  <tr>
+                    <td class="search shortcut"><kbd>s</kbd></td>
+                    <td>Search</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div>
+
+    </body>
+</html>
