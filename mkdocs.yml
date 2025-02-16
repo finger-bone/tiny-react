@@ -1,6 +1,6 @@
 site_name: Build Your Own React
 site_url: https://finger-bone.github.io/tiny-react/
-site_description: Introduction to the core of React from the very beginning
+site_description: A simple introduction to the core of React from the very beginning
 
 theme:
   name: lux
