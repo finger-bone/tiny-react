@@ -1,0 +1,23 @@
+site_name: Build Your Own React
+site_url: https://finger-bone.github.io/tiny-react/
+site_description: Introduction to the core of React from the very beginning
+
+theme:
+  name: lux
+  font:
+    text: Inter
+    code: Fira Code
+
+docs_dir: notes
+
+nav:
+- JSX: 01.md
+- Rendering vDOM: 02.md
+- Updating vDOM: 03.md
+- Hooks: 04.md
+
+extra_javascript:
+- https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.4/MathJax.js?config=TeX-AMS-MML_HTMLorMML
+markdown_extensions:
+  mdx_math:
+    enable_dollar_delimiter: true
